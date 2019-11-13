@@ -38,20 +38,68 @@ const tooltipDivFlex = d3
 
 const path = d3.geoPath();
 
-d3.json(
-  "https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/counties.json"
-)
-  .then(json => {
-    console.log("json :", json);
-    const counties = bodySvg
-      .append("g")
-      .attr("class", "counties")
-      .selectAll("path")
-      .data(topojson.feature(json, json.objects.counties).features)
-      .enter()
-      .append("path")
-      .attr("d", path);
-  })
-  .catch(err => {
-    console.error(err);
-  });
+Promise.all([
+  d3.json(
+    "https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/counties.json"
+  ),
+  d3.json(
+    "https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/for_user_education.json"
+  )
+]).then(([countyData, eduData]) => {
+  console.log("countyData :", countyData);
+  console.log("eduData :", eduData);
+
+  const colorScale = d3
+    .scaleLinear()
+    .domain([0, 100])
+    .range(["yellowgreen", "orangered"]);
+
+  const counties = bodySvg.append("g").attr("class", "counties");
+
+  counties
+    .selectAll("path")
+    .data(topojson.feature(countyData, countyData.objects.counties).features)
+    .enter()
+    .append("path")
+    .attr("class", "county")
+    .attr("d", path)
+    .attr("data-fips", d => d.id)
+    .attr("data-education", d => {
+      const fipsObj = eduData.filter(item => item.fips == d.id);
+      const { bachelorsOrHigher } = fipsObj[0];
+      if (bachelorsOrHigher) {
+        return bachelorsOrHigher;
+      }
+    })
+    .attr("fill", d => {
+      const fipsObj = eduData.filter(item => item.fips == d.id);
+      const { bachelorsOrHigher } = fipsObj[0];
+      return colorScale(bachelorsOrHigher);
+    })
+    .on("mouseover", d => {
+      const fipsObj = eduData.filter(item => item.fips == d.id);
+      const { bachelorsOrHigher, area_name, state } = fipsObj[0];
+      tooltipDiv
+        .style("left", d3.event.pageX + 10 + "px")
+        .style("top", d3.event.pageY + 10 + "px")
+        .attr("data-fips", d.id);
+
+      tooltipDivFlex
+        .style("font-size", "14px")
+        .style("font-family", "sans-serif")
+        .html(() => {
+          return bachelorsOrHigher + "% " + area_name + ", " + state;
+        });
+
+      tooltipDiv
+        .transition()
+        .duration(50)
+        .style("opacity", 0.8);
+    })
+    .on("mouseout", d => {
+      tooltipDiv
+        .transition()
+        .duration(600)
+        .style("opacity", 0);
+    });
+});
